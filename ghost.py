@@ -125,6 +125,7 @@ def show_menu():
             f"{color_text(f'[{right}]', 'green')} {items[right - 1]}"
         )
     print(f"{color_text('[29]', 'green')} Управлять телефоном с ПК (мышь и клавиатура)")
+    print(f"{color_text('[30]', 'green')} Подключиться по SSH (терминал телефона)")
     print(f"\n{color_text('[0]', 'red')} Выход\n")
 
 
@@ -310,6 +311,58 @@ def control_device():
                           "Подробности указаны выше в выводе scrcpy.")
     except OSError as e:
         logging.error(f"Не удалось запустить scrcpy: {e}")
+
+def connect_ssh():
+    """Открыть интерактивный SSH-сеанс без сохранения пароля."""
+    ssh = shutil.which('ssh')
+    if not ssh:
+        logging.error("SSH-клиент не установлен. Установите openssh-client.")
+        return
+    print("На телефоне должен работать SSH-сервер (например, sshd в Termux).")
+    while True:
+        host = input(color_text("Адрес или имя хоста SSH (Enter — отмена): ", 'blue')).strip()
+        if not host:
+            return
+        try:
+            ipaddress.ip_address(host)
+            valid = True
+        except ValueError:
+            valid = len(host) <= 253 and all(
+                label and len(label) <= 63 and label[0] != '-' and label[-1] != '-'
+                and all(c.isascii() and (c.isalnum() or c == '-') for c in label)
+                for label in host.rstrip('.').split('.')
+            )
+        if valid:
+            break
+        print("Введите IP-адрес или имя хоста без порта и имени пользователя.")
+    while True:
+        user = input(color_text("Имя пользователя SSH: ", 'blue')).strip()
+        if user and not user.startswith('-') and all(
+            c.isascii() and (c.isalnum() or c in '_.-') for c in user
+        ):
+            break
+        print("Введите имя пользователя, например u0_a123 (команда whoami в Termux).")
+    while True:
+        port = input(color_text("Порт SSH [8022 — Termux; обычно 22 для Linux]: ", 'blue')).strip() or '8022'
+        if port.isascii() and port.isdecimal() and len(port) <= 5 and 1 <= int(port) <= 65535:
+            break
+        print("Введите порт от 1 до 65535.")
+    key = input(color_text("Путь к SSH-ключу (Enter — стандартные ключи или пароль): ", 'blue')).strip()
+    command = [ssh, '-p', port, '-l', user, '-o', 'ConnectTimeout=10']
+    if key:
+        key = os.path.expanduser(key)
+        if not os.path.isfile(key):
+            logging.error("Файл SSH-ключа не найден.")
+            return
+        command.extend(['-i', key, '-o', 'IdentitiesOnly=yes'])
+    command.extend(['--', host])
+    print("Вход по SSH. Пароль при вводе не отображается. Для возврата в Ghost введите exit.")
+    try:
+        result = subprocess.run(command)
+        if result.returncode:
+            logging.error(f"SSH-сеанс завершился с кодом {result.returncode}. Подробности указаны выше.")
+    except OSError as e:
+        logging.error(f"Не удалось запустить SSH: {e}")
 
 def disconnect_device():
     """Disconnect from all connected devices."""
@@ -866,6 +919,8 @@ def main():
                 view_device_logs()
             elif choice == '29':
                 control_device()
+            elif choice == '30':
+                connect_ssh()
             elif choice == '0':
                 logging.info("Выход из Ghost Framework. До свидания!")
                 break
