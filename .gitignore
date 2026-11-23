@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+*.before-ru
+*.log
+screenshot_*.png
+screenrecord.mp4

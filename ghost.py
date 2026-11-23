@@ -6,7 +6,7 @@
 # Required-Stop:     $remote_fs
 # Default-Start:     2 3 4 5
 # Default-Stop:      0 1 6
-# Short-Description: Remote ADB Control Tool for Android Devices
+# Short-Description: Удалённое управление Android через ADB for Android Devices
 # Description:       A tool to manage Android devices via ADB for debugging, file management, screen mirroring, and more.
 # Author:            
 # + LIONMAD <https://github.com/Midohajhouj> 
@@ -30,7 +30,7 @@ import gzip
 from tqdm import tqdm 
 
 # Define the log directory
-log_dir = "/opt/Ghost-Framework/logs/"
+log_dir = os.path.join(os.environ.get("XDG_STATE_HOME", os.path.expanduser("~/.local/state")), "ghost-framework", "logs")
 
 # Create the directory if it doesn't exist
 if not os.path.exists(log_dir):
@@ -69,8 +69,8 @@ def show_banner():
     banner = f"""
       .-.
     .'   `.       {color_text('Ghost Framework v2.0', 'blue')}
-   :0 0  :        {color_text('Remote ADB Control Tool', 'yellow')}
-   : o    `.      {color_text ('Coded by LIONMAD' , 'red')}
+   :0 0  :        {color_text('Удалённое управление Android через ADB', 'yellow')}
+   : o    `.      {color_text ('Автор: LIONMAD' , 'red')}
   :         ``.
  :             `.
 :  :         .   `.
@@ -87,25 +87,45 @@ def show_banner():
     
 def show_menu():
     """Display the main menu options."""
-    menu = f"""
-{color_text('[1]', 'green')} Show Connected Devices          {color_text('[15]', 'green')} Uninstall App
-{color_text('[2]', 'green')} Connect to a Device             {color_text('[16]', 'green')} Show Device Info
-{color_text('[3]', 'green')} Disconnect from a Device        {color_text('[17]', 'green')} Mirror Screen
-{color_text('[4]', 'green')} Access Device Shell             {color_text('[18]', 'green')} Execute Custom Command
-{color_text('[5]', 'green')} Install APK                     {color_text('[19]', 'green')} Interactive Shell
-{color_text('[6]', 'green')} Install Multiple APKs           {color_text('[20]', 'green')} List Files on Device
-{color_text('[7]', 'green')} Take Screenshot                 {color_text('[21]', 'green')} Delete File on Device
-{color_text('[8]', 'green')} Record Screen                   {color_text('[22]', 'green')} Check Battery Health
-{color_text('[9]', 'green')} List Installed Apps             {color_text('[23]', 'green')} Execute Script
-{color_text('[10]', 'green')} Reboot Device                  {color_text('[24]', 'green')} Interactive File Browser
-{color_text('[11]', 'green')} Backup Device                  {color_text('[25]', 'green')} Batch Push/Pull Files
-{color_text('[12]', 'green')} Restore Device                 {color_text('[26]', 'green')} Connect via Wi-Fi ADB
-{color_text('[13]', 'green')} Push File (Secure)             {color_text('[27]', 'green')} Compress/Decompress Files
-{color_text('[14]', 'green')} Pull File (Secure)             {color_text('[28]', 'green')} View Device Logs (logcat)
-                         {color_text('[0]', 'red')} Exit
+    items = [
+        'Подключённые устройства',
+        'Подключиться к устройству',
+        'Отключить устройства',
+        'Оболочка ADB',
+        'Установить APK',
+        'Установить несколько APK',
+        'Сделать скриншот',
+        'Записать экран',
+        'Список приложений',
+        'Перезагрузить устройство',
+        'Создать резервную копию',
+        'Восстановить из копии',
+        'Отправить файл (шифрование)',
+        'Скачать файл (шифрование)',
+        'Удалить приложение',
+        'Сведения об устройстве',
+        'Показать экран',
+        'Выполнить команду ADB',
+        'Интерактивная оболочка',
+        'Файлы на устройстве',
+        'Удалить файл на устройстве',
+        'Состояние батареи',
+        'Выполнить скрипт',
+        'Просмотр файлов',
+        'Передать несколько файлов',
+        'Подключение ADB по Wi-Fi',
+        'Упаковать / распаковать',
+        'Журнал устройства (logcat)',
+    ]
+    print()
+    for row in range(14):
+        left, right = row + 1, row + 15
+        print(
+            f"{color_text(f'[{left}]'.ljust(4), 'green')} {items[left - 1]:<29} "
+            f"{color_text(f'[{right}]', 'green')} {items[right - 1]}"
+        )
+    print(f"\n{color_text('[0]', 'red')} Выход\n")
 
-"""
-    print(menu)
 
 async def run_command_async(command):
     """Run a command asynchronously and return the output."""
@@ -117,21 +137,21 @@ async def run_command_async(command):
     stdout, stderr = await process.communicate()
     
     if process.returncode != 0:
-        logging.error(f"Error executing command: {stderr.decode().strip()}")
-        return f"Error executing command: {stderr.decode().strip()}"
+        logging.error(f"Ошибка выполнения команды: {stderr.decode().strip()}")
+        return f"Ошибка выполнения команды: {stderr.decode().strip()}"
     
-    logging.debug(f"Command executed: {command}")
+    logging.debug(f"Команда выполнена: {command}")
     return stdout.decode().strip()
 
 def run_command(command):
     """Run a command synchronously and return the output."""
     try:
         result = subprocess.run(command, shell=True, text=True, capture_output=True, check=True)
-        logging.debug(f"Command executed: {command}")
+        logging.debug(f"Команда выполнена: {command}")
         return result.stdout.strip()
     except subprocess.CalledProcessError as e:
-        logging.error(f"Error executing command: {e.stderr}")
-        return f"Error executing command: {e.stderr}"
+        logging.error(f"Ошибка выполнения команды: {e.stderr}")
+        return f"Ошибка выполнения команды: {e.stderr}"
 
 def validate_ip(ip):
     """Validate an IP address."""
@@ -144,40 +164,40 @@ def select_device():
     devices = [line.split('\t')[0] for line in devices_output.splitlines()[1:] if line.endswith('\tdevice')]
     
     if not devices:
-        logging.error("No devices connected.")
+        logging.error("Нет подключённых устройств.")
         return None
     elif len(devices) == 1:
         return devices[0]
     
-    print(color_text("Connected devices:", 'yellow'))
+    print(color_text("Подключённые устройства:", 'yellow'))
     for i, device in enumerate(devices):
         print(f"{color_text(f'[{i + 1}]', 'green')} {device}")
     
-    choice = input(color_text("Select a device: ", 'blue'))
+    choice = input(color_text("Выберите устройство: ", 'blue'))
     try:
         choice = int(choice) - 1
         if 0 <= choice < len(devices):
             return devices[choice]
         else:
-            logging.error("Invalid selection.")
+            logging.error("Неверный выбор.")
             return None
     except ValueError:
-        logging.error("Invalid input.")
+        logging.error("Неверный ввод.")
         return None
 
 def show_connected_devices():
     """Show all connected devices."""
     output = run_command("adb devices")
-    if "error" in output.lower():
+    if "error" in output.lower() or "ошибка" in output.lower():
         logging.error(output)
     else:
         print(color_text(output, 'yellow'))
 
 def connect_device():
     """Connect to a device using its IP address."""
-    ip = input(color_text("Enter device IP: ", 'blue'))
+    ip = input(color_text("Введите IP-адрес устройства: ", 'blue'))
     if not validate_ip(ip):
-        logging.error("Invalid IP address.")
+        logging.error("Неверный IP-адрес.")
         return
     output = run_command(f"adb connect {ip}")
     if "connected" in output.lower():
@@ -198,59 +218,59 @@ def access_shell():
     device = select_device()
     if not device:
         return
-    print(color_text(f"Entering ADB shell for device {device}...", 'blue'))
+    print(color_text(f"Открывается оболочка ADB устройства {device}...", 'blue'))
     try:
         subprocess.run(f"adb -s {device} shell", shell=True, check=True)
     except subprocess.CalledProcessError as e:
-        logging.error(f"Error accessing shell: {e}")
+        logging.error(f"Ошибка доступа к оболочке: {e}")
 
 def adb_command(device, command):
     """Execute an ADB command on the specified device."""
     try:
         result = subprocess.run(f"adb -s {device} {command}", shell=True, text=True, capture_output=True, check=True)
-        logging.debug(f"Command executed: {command}")
+        logging.debug(f"Команда выполнена: {command}")
         return result.stdout.strip()
     except subprocess.CalledProcessError as e:
-        logging.error(f"Error executing command: {e.stderr}")
-        return f"Error executing command: {e.stderr}"
+        logging.error(f"Ошибка выполнения команды: {e.stderr}")
+        return f"Ошибка выполнения команды: {e.stderr}"
 
 def install_apk():
     """Install a single APK."""
     device = select_device()
     if not device:
         return
-    apk_path = input(color_text("Enter path to APK: ", 'blue'))
+    apk_path = input(color_text("Введите путь к APK: ", 'blue'))
     if not os.path.exists(apk_path):
-        logging.error("APK file not found!")
+        logging.error("APK-файл не найден!")
         return
     
     try:
-        logging.info(f"Installing APK: {apk_path}")
+        logging.info(f"Установка APK: {apk_path}")
         output = adb_command(device, f"install {apk_path}")
         if "success" in output.lower():
-            logging.info(f"APK installed successfully: {apk_path}")
+            logging.info(f"APK успешно установлен: {apk_path}")
         else:
-            logging.error(f"Failed to install APK: {output}")
+            logging.error(f"Не удалось установить APK: {output}")
     except Exception as e:
-        logging.error(f"An error occurred: {e}")
+        logging.error(f"Произошла ошибка: {e}")
 
 def install_multiple_apks():
     """Install multiple APKs in batch."""
     device = select_device()
     if not device:
         return
-    apk_paths = input(color_text("Enter paths to APKs (comma-separated): ", 'blue')).split(',')
+    apk_paths = input(color_text("Введите пути к APK через запятую: ", 'blue')).split(',')
     for apk_path in apk_paths:
         apk_path = apk_path.strip()
         if not os.path.exists(apk_path):
-            logging.error(f"APK file not found: {apk_path}")
+            logging.error(f"APK-файл не найден: {apk_path}")
             continue
-        logging.info(f"Installing APK: {apk_path}")
+        logging.info(f"Установка APK: {apk_path}")
         output = adb_command(device, f"install {apk_path}")
         if "success" in output.lower():
-            logging.info(f"APK installed successfully: {apk_path}")
+            logging.info(f"APK успешно установлен: {apk_path}")
         else:
-            logging.error(f"Failed to install APK: {output}")
+            logging.error(f"Не удалось установить APK: {output}")
 
 def take_screenshot():
     """Take screenshot with timestamp-based file naming."""
@@ -261,30 +281,30 @@ def take_screenshot():
     screenshot_file = f"screenshot_{timestamp}.png"
     output = adb_command(device, f"exec-out screencap -p > {screenshot_file}")
     if os.path.exists(screenshot_file):
-        logging.info(f"Screenshot saved as {screenshot_file}")
+        logging.info(f"Скриншот сохранён: {screenshot_file}")
     else:
-        logging.error("Failed to take screenshot.")
+        logging.error("Не удалось сделать скриншот.")
 
 def record_screen():
     """Record the screen of the connected device."""
     device = select_device()
     if not device:
         return
-    duration = input(color_text("Enter recording duration (seconds): ", 'blue'))
+    duration = input(color_text("Введите длительность записи в секундах: ", 'blue'))
     try:
         duration = int(duration)
         if duration <= 0:
-            raise ValueError("Duration must be a positive integer.")
+            raise ValueError("Длительность должна быть целым положительным числом.")
     except ValueError as e:
-        logging.error(f"Invalid duration: {e}")
+        logging.error(f"Неверная длительность: {e}")
         return
 
-    logging.info(f"Recording for {duration} seconds...")
+    logging.info(f"Запись в течение {duration} секунд...")
     output = adb_command(device, f"shell screenrecord --time-limit {duration} /sdcard/screenrecord.mp4 && pull /sdcard/screenrecord.mp4")
     if os.path.exists("screenrecord.mp4"):
-        logging.info("Screen recording saved as screenrecord.mp4")
+        logging.info("Запись экрана сохранена: screenrecord.mp4")
     else:
-        logging.error("Failed to record screen.")
+        logging.error("Не удалось записать экран.")
 
 def list_installed_apps():
     """List all installed apps on the connected device."""
@@ -292,7 +312,7 @@ def list_installed_apps():
     if not device:
         return
     output = adb_command(device, "shell pm list packages")
-    if "error" in output.lower():
+    if "error" in output.lower() or "ошибка" in output.lower():
         logging.error(output)
     else:
         print(color_text(output, 'yellow'))
@@ -303,18 +323,18 @@ def reboot_device():
     if not device:
         return
     output = adb_command(device, "reboot")
-    if "error" in output.lower():
+    if "error" in output.lower() or "ошибка" in output.lower():
         logging.error(output)
     else:
-        logging.info("Device rebooted.")
+        logging.info("Устройство перезагружено.")
 
 def backup_device():
     """Backup device data with progress indicator."""
     device = select_device()
     if not device:
         return
-    backup_file = input(color_text("Enter backup file name: ", 'blue'))
-    print(color_text("Starting backup...", 'blue'))
+    backup_file = input(color_text("Введите имя файла резервной копии: ", 'blue'))
+    print(color_text("Создание резервной копии...", 'blue'))
     process = subprocess.Popen(f"adb -s {device} backup -all -f {backup_file}.ab", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     
     while True:
@@ -323,32 +343,32 @@ def backup_device():
             break
         if output:
             print(color_text(output.strip(), 'yellow'))
-            print(color_text("Backup in progress...", 'blue'))
+            print(color_text("Выполняется резервное копирование...", 'blue'))
     
     if process.returncode == 0:
-        logging.info(f"Backup saved as {backup_file}.ab")
+        logging.info(f"Резервная копия сохранена: {backup_file}.ab")
     else:
-        logging.error("Backup failed.")
+        logging.error("Не удалось создать резервную копию.")
 
 def restore_device():
     """Restore device data."""
     device = select_device()
     if not device:
         return
-    backup_file = input(color_text("Enter backup file name: ", 'blue'))
+    backup_file = input(color_text("Введите имя файла резервной копии: ", 'blue'))
     output = adb_command(device, f"restore {backup_file}.ab")
-    if "error" in output.lower():
+    if "error" in output.lower() or "ошибка" in output.lower():
         logging.error(output)
     else:
-        logging.info(f"Restored from {backup_file}.ab")
+        logging.info(f"Восстановлено из {backup_file}.ab")
 
 def push_file_secure():
     """Push a file to the device securely."""
     device = select_device()
     if not device:
         return
-    local_path = input(color_text("Enter local file path: ", 'blue'))
-    remote_path = input(color_text("Enter remote file path: ", 'blue'))
+    local_path = input(color_text("Введите путь к файлу на компьютере: ", 'blue'))
+    remote_path = input(color_text("Введите путь к файлу на устройстве: ", 'blue'))
     
     # Encrypt the file before pushing
     try:
@@ -360,26 +380,26 @@ def push_file_secure():
             file.write(encrypted_data)
         
         output = adb_command(device, f"push {encrypted_file} {remote_path}")
-        if "error" in output.lower():
+        if "error" in output.lower() or "ошибка" in output.lower():
             logging.error(output)
         else:
-            logging.info(f"File pushed securely to {remote_path}")
+            logging.info(f"Зашифрованный файл отправлен в {remote_path}")
         os.remove(encrypted_file)  # Clean up the encrypted file
     except Exception as e:
-        logging.error(f"Error during secure file push: {e}")
+        logging.error(f"Ошибка отправки зашифрованного файла: {e}")
 
 def pull_file_secure():
     """Pull a file from the device securely."""
     device = select_device()
     if not device:
         return
-    remote_path = input(color_text("Enter remote file path: ", 'blue'))
-    local_path = input(color_text("Enter local file path: ", 'blue'))
+    remote_path = input(color_text("Введите путь к файлу на устройстве: ", 'blue'))
+    local_path = input(color_text("Введите путь к файлу на компьютере: ", 'blue'))
     
     # Pull the encrypted file
     encrypted_file = local_path + ".enc"
     output = adb_command(device, f"pull {remote_path} {encrypted_file}")
-    if "error" in output.lower():
+    if "error" in output.lower() or "ошибка" in output.lower():
         logging.error(output)
         return
     
@@ -390,22 +410,22 @@ def pull_file_secure():
         decrypted_data = cipher_suite.decrypt(encrypted_data)
         with open(local_path, 'wb') as file:
             file.write(decrypted_data)
-        logging.info(f"File pulled securely to {local_path}")
+        logging.info(f"Расшифрованный файл сохранён в {local_path}")
         os.remove(encrypted_file)  # Clean up the encrypted file
     except Exception as e:
-        logging.error(f"Error during secure file pull: {e}")
+        logging.error(f"Ошибка скачивания зашифрованного файла: {e}")
 
 def uninstall_app():
     """Uninstall an app from the device."""
     device = select_device()
     if not device:
         return
-    package_name = input(color_text("Enter package name to uninstall: ", 'blue'))
+    package_name = input(color_text("Введите имя пакета для удаления: ", 'blue'))
     output = adb_command(device, f"uninstall {package_name}")
     if "success" in output.lower():
-        logging.info(f"App {package_name} uninstalled successfully.")
+        logging.info(f"Приложение {package_name} успешно удалено.")
     else:
-        logging.error(f"Failed to uninstall app: {output}")
+        logging.error(f"Не удалось удалить приложение: {output}")
 
 def show_device_info():
     """Show detailed device information."""
@@ -415,9 +435,9 @@ def show_device_info():
     model = adb_command(device, "shell getprop ro.product.model")
     android_version = adb_command(device, "shell getprop ro.build.version.release")
     battery_level = adb_command(device, "shell dumpsys battery | grep level")
-    logging.info(f"Model: {model}")
-    logging.info(f"Android Version: {android_version}")
-    logging.info(f"Battery Level: {battery_level}")
+    logging.info(f"Модель: {model}")
+    logging.info(f"Версия Android: {android_version}")
+    logging.info(f"Уровень заряда: {battery_level}")
 
 def mirror_screen():
     """Mirror the device screen to the computer."""
@@ -425,17 +445,17 @@ def mirror_screen():
     if not device:
         return
     output = adb_command(device, "exec-out screenrecord --output-format=h264 - | ffplay -")
-    if "error" in output.lower():
+    if "error" in output.lower() or "ошибка" in output.lower():
         logging.error(output)
     else:
-        logging.info("Screen mirroring started.")
+        logging.info("Трансляция экрана запущена.")
 
 def execute_custom_command():
     """Execute a custom ADB command."""
     device = select_device()
     if not device:
         return
-    command = input(color_text("Enter custom ADB command: ", 'blue'))
+    command = input(color_text("Введите команду ADB: ", 'blue'))
     output = adb_command(device, command)
     logging.info(output)
 
@@ -444,8 +464,8 @@ def interactive_shell():
     device = select_device()
     if not device:
         return
-    print(color_text(f"Starting interactive ADB shell for device {device}...", 'blue'))
-    print(color_text("Type 'exit' to return to the main menu.", 'yellow'))
+    print(color_text(f"Запуск интерактивной оболочки ADB устройства {device}...", 'blue'))
+    print(color_text("Введите 'exit' для возврата в главное меню.", 'yellow'))
     while True:
         command = input(color_text("adb shell> ", 'blue'))
         if command.lower() == 'exit':
@@ -458,9 +478,9 @@ def list_files_on_device():
     device = select_device()
     if not device:
         return
-    remote_path = input(color_text("Enter remote directory path: ", 'blue'))
+    remote_path = input(color_text("Введите путь к каталогу на устройстве: ", 'blue'))
     output = adb_command(device, f"shell ls {remote_path}")
-    if "error" in output.lower():
+    if "error" in output.lower() or "ошибка" in output.lower():
         logging.error(output)
     else:
         print(color_text(output, 'yellow'))
@@ -470,12 +490,12 @@ def delete_file_on_device():
     device = select_device()
     if not device:
         return
-    remote_path = input(color_text("Enter remote file/directory path: ", 'blue'))
+    remote_path = input(color_text("Введите путь к файлу или каталогу на устройстве: ", 'blue'))
     output = adb_command(device, f"shell rm -rf {remote_path}")
-    if "error" in output.lower():
+    if "error" in output.lower() or "ошибка" in output.lower():
         logging.error(output)
     else:
-        logging.info(f"Deleted {remote_path}")
+        logging.info(f"Удалено: {remote_path}")
 
 def check_battery_health():
     """Check the battery health and charging status."""
@@ -484,17 +504,17 @@ def check_battery_health():
         return
     battery_health = adb_command(device, "shell dumpsys battery | grep health")
     charging_status = adb_command(device, "shell dumpsys battery | grep status")
-    logging.info(f"Battery Health: {battery_health}")
-    logging.info(f"Charging Status: {charging_status}")
+    logging.info(f"Состояние батареи: {battery_health}")
+    logging.info(f"Состояние зарядки: {charging_status}")
 
 def execute_script():
     """Execute a series of ADB commands from a script file."""
     device = select_device()
     if not device:
         return
-    script_path = input(color_text("Enter path to script file: ", 'blue'))
+    script_path = input(color_text("Введите путь к скрипту: ", 'blue'))
     if not os.path.exists(script_path):
-        logging.error("Script file not found!")
+        logging.error("Скрипт не найден!")
         return
     
     with open(script_path, 'r') as file:
@@ -503,7 +523,7 @@ def execute_script():
     for command in commands:
         command = command.strip()
         if command:
-            logging.info(f"Executing command: {command}")
+            logging.info(f"Выполнение команды: {command}")
             output = adb_command(device, command)
             print(color_text(output, 'yellow'))
 
@@ -512,109 +532,109 @@ def interactive_file_browser():
     device = select_device()
     if not device:
         return
-    remote_path = input(color_text("Enter remote directory path: ", 'blue'))
+    remote_path = input(color_text("Введите путь к каталогу на устройстве: ", 'blue'))
     output = adb_command(device, f"shell ls {remote_path}")
-    if "error" in output.lower():
+    if "error" in output.lower() or "ошибка" in output.lower():
         logging.error(output)
         return
     
     files = output.splitlines()
-    print(color_text("Files in directory:", 'yellow'))
+    print(color_text("Файлы в каталоге:", 'yellow'))
     for i, file in enumerate(files):
         print(f"{color_text(f'[{i + 1}]', 'green')} {file}")
     
-    choice = input(color_text("Select a file: ", 'blue'))
+    choice = input(color_text("Выберите файл: ", 'blue'))
     try:
         choice = int(choice) - 1
         if 0 <= choice < len(files):
             selected_file = files[choice]
-            action = input(color_text("Do you want to (1) Push or (2) Pull this file? ", 'blue'))
+            action = input(color_text("Действие: (1) отправить или (2) скачать файл: ", 'blue'))
             if action == '1':
-                local_path = input(color_text("Enter local file path: ", 'blue'))
+                local_path = input(color_text("Введите путь к файлу на компьютере: ", 'blue'))
                 output = adb_command(device, f"push {local_path} {remote_path}/{selected_file}")
-                if "error" in output.lower():
+                if "error" in output.lower() or "ошибка" in output.lower():
                     logging.error(output)
                 else:
-                    logging.info(f"File pushed to {remote_path}/{selected_file}")
+                    logging.info(f"Файл отправлен в {remote_path}/{selected_file}")
             elif action == '2':
-                local_path = input(color_text("Enter local file path: ", 'blue'))
+                local_path = input(color_text("Введите путь к файлу на компьютере: ", 'blue'))
                 output = adb_command(device, f"pull {remote_path}/{selected_file} {local_path}")
-                if "error" in output.lower():
+                if "error" in output.lower() or "ошибка" in output.lower():
                     logging.error(output)
                 else:
-                    logging.info(f"File pulled to {local_path}")
+                    logging.info(f"Файл сохранён в {local_path}")
             else:
-                logging.error("Invalid action.")
+                logging.error("Неверное действие.")
         else:
-            logging.error("Invalid selection.")
+            logging.error("Неверный выбор.")
     except ValueError:
-        logging.error("Invalid input.")
+        logging.error("Неверный ввод.")
 
 def batch_push_pull_files():
     """Batch push or pull multiple files."""
     device = select_device()
     if not device:
         return
-    action = input(color_text("Do you want to (1) Push or (2) Pull files? ", 'blue'))
+    action = input(color_text("Действие: (1) отправить или (2) скачать файлы: ", 'blue'))
     if action not in ['1', '2']:
-        logging.error("Invalid action.")
+        logging.error("Неверное действие.")
         return
     
     if action == '1':
-        local_dir = input(color_text("Enter local directory path: ", 'blue'))
-        remote_dir = input(color_text("Enter remote directory path: ", 'blue'))
+        local_dir = input(color_text("Введите путь к каталогу на компьютере: ", 'blue'))
+        remote_dir = input(color_text("Введите путь к каталогу на устройстве: ", 'blue'))
         if not os.path.isdir(local_dir):
-            logging.error("Local directory not found.")
+            logging.error("Каталог на компьютере не найден.")
             return
         
         files = os.listdir(local_dir)
-        for file in tqdm(files, desc="Pushing files", unit="file"):
+        for file in tqdm(files, desc="Отправка файлов", unit="файл"):
             local_path = os.path.join(local_dir, file)
             output = adb_command(device, f"push {local_path} {remote_dir}")
-            if "error" in output.lower():
-                logging.error(f"Failed to push {file}: {output}")
+            if "error" in output.lower() or "ошибка" in output.lower():
+                logging.error(f"Не удалось отправить {file}: {output}")
             else:
-                logging.info(f"Pushed {file} to {remote_dir}")
+                logging.info(f"Файл {file} отправлен в {remote_dir}")
     
     elif action == '2':
-        remote_dir = input(color_text("Enter remote directory path: ", 'blue'))
-        local_dir = input(color_text("Enter local directory path: ", 'blue'))
+        remote_dir = input(color_text("Введите путь к каталогу на устройстве: ", 'blue'))
+        local_dir = input(color_text("Введите путь к каталогу на компьютере: ", 'blue'))
         if not os.path.isdir(local_dir):
-            logging.error("Local directory not found.")
+            logging.error("Каталог на компьютере не найден.")
             return
         
         output = adb_command(device, f"shell ls {remote_dir}")
-        if "error" in output.lower():
+        if "error" in output.lower() or "ошибка" in output.lower():
             logging.error(output)
             return
         
         files = output.splitlines()
-        for file in tqdm(files, desc="Pulling files", unit="file"):
+        for file in tqdm(files, desc="Скачивание файлов", unit="файл"):
             output = adb_command(device, f"pull {remote_dir}/{file} {local_dir}")
-            if "error" in output.lower():
-                logging.error(f"Failed to pull {file}: {output}")
+            if "error" in output.lower() or "ошибка" in output.lower():
+                logging.error(f"Не удалось скачать {file}: {output}")
             else:
-                logging.info(f"Pulled {file} to {local_dir}")
+                logging.info(f"Файл {file} сохранён в {local_dir}")
 
 def connect_wifi_adb():
     """Connect to a device over Wi-Fi using ADB."""
     device = select_device()
     if not device:
         return
-    ip = input(color_text("Enter device IP address: ", 'blue'))
+    ip = input(color_text("Введите IP-адрес устройства: ", 'blue'))
     if not validate_ip(ip):
-        logging.error("Invalid IP address.")
+        logging.error("Неверный IP-адрес.")
         return
     output = run_command(f"adb -s {device} tcpip 5555")
     if "restarting" in output.lower():
-        logging.info("ADB daemon restarted in TCP mode.")
+        logging.info("Служба ADB перезапущена в режиме TCP.")
         output = run_command(f"adb -s {device} connect {ip}")
         if "connected" in output.lower():
-            logging.info(f"Connected to {ip} over Wi-Fi.")
+            logging.info(f"Подключено к {ip} по Wi-Fi.")
         else:
-            logging.error(f"Failed to connect to {ip}.")
+            logging.error(f"Не удалось подключиться к {ip}.")
     else:
-        logging.error("Failed to restart ADB in TCP mode.")
+        logging.error("Не удалось перезапустить ADB в режиме TCP.")
 
 def compress_file(file_path, compress_type="zip"):
     """Compress a file using ZIP or GZIP."""
@@ -622,16 +642,16 @@ def compress_file(file_path, compress_type="zip"):
         if compress_type == "zip":
             with zipfile.ZipFile(f"{file_path}.zip", 'w') as zipf:
                 zipf.write(file_path, os.path.basename(file_path))
-            logging.info(f"File compressed as {file_path}.zip")
+            logging.info(f"Архив сохранён: {file_path}.zip")
         elif compress_type == "gzip":
             with open(file_path, 'rb') as f_in:
                 with gzip.open(f"{file_path}.gz", 'wb') as f_out:
                     shutil.copyfileobj(f_in, f_out)
-            logging.info(f"File compressed as {file_path}.gz")
+            logging.info(f"Архив сохранён: {file_path}.gz")
         else:
-            logging.error("Unsupported compression type.")
+            logging.error("Неподдерживаемый тип сжатия.")
     except Exception as e:
-        logging.error(f"Error compressing file: {e}")
+        logging.error(f"Ошибка сжатия файла: {e}")
 
 def decompress_file(file_path):
     """Decompress a ZIP or GZIP file."""
@@ -639,29 +659,29 @@ def decompress_file(file_path):
         if file_path.endswith(".zip"):
             with zipfile.ZipFile(file_path, 'r') as zipf:
                 zipf.extractall(os.path.dirname(file_path))
-            logging.info(f"File decompressed from {file_path}")
+            logging.info(f"Распакован архив {file_path}")
         elif file_path.endswith(".gz"):
             with gzip.open(file_path, 'rb') as f_in:
                 with open(file_path[:-3], 'wb') as f_out:
                     shutil.copyfileobj(f_in, f_out)
-            logging.info(f"File decompressed from {file_path}")
+            logging.info(f"Распакован архив {file_path}")
         else:
-            logging.error("Unsupported file format.")
+            logging.error("Неподдерживаемый формат файла.")
     except Exception as e:
-        logging.error(f"Error decompressing file: {e}")
+        logging.error(f"Ошибка распаковки файла: {e}")
 
 def view_device_logs():
     """View device logs (logcat) in real-time."""
     device = select_device()
     if not device:
         return
-    print(color_text("Starting logcat... Press Ctrl+C to stop.", 'blue'))
+    print(color_text("Запуск logcat... Для остановки нажмите Ctrl+C.", 'blue'))
     try:
         subprocess.run(f"adb -s {device} logcat", shell=True, check=True)
     except subprocess.CalledProcessError as e:
-        logging.error(f"Error viewing logs: {e}")
+        logging.error(f"Ошибка чтения журнала: {e}")
     except KeyboardInterrupt:
-        logging.info("Logcat stopped.")
+        logging.info("Чтение logcat остановлено.")
 
 def main():
     """Main function to display menu and handle user input."""
@@ -672,7 +692,7 @@ def main():
             show_banner()
             show_menu()
 
-            choice = input(color_text("Select an option: ", 'blue'))
+            choice = input(color_text("Выберите пункт: ", 'blue'))
 
             if choice == '1':
                 show_connected_devices()
@@ -727,27 +747,27 @@ def main():
             elif choice == '26':
                 connect_wifi_adb()
             elif choice == '27':
-                file_path = input(color_text("Enter file path to compress/decompress: ", 'blue'))
-                action = input(color_text("Do you want to (1) Compress or (2) Decompress? ", 'blue'))
+                file_path = input(color_text("Введите путь к файлу для упаковки или распаковки: ", 'blue'))
+                action = input(color_text("Действие: (1) упаковать или (2) распаковать: ", 'blue'))
                 if action == '1':
-                    compress_type = input(color_text("Enter compression type (zip/gzip): ", 'blue'))
+                    compress_type = input(color_text("Введите тип сжатия (zip/gzip): ", 'blue'))
                     compress_file(file_path, compress_type)
                 elif action == '2':
                     decompress_file(file_path)
                 else:
-                    logging.error("Invalid action.")
+                    logging.error("Неверное действие.")
             elif choice == '28':
                 view_device_logs()
             elif choice == '0':
-                logging.info("Exiting Ghost Framework. Goodbye!")
+                logging.info("Выход из Ghost Framework. До свидания!")
                 break
             else:
-                logging.error("Invalid option. Please try again.")
+                logging.error("Неверный пункт. Попробуйте ещё раз.")
 
-            input(color_text("Press Enter to continue...", 'blue'))
+            input(color_text("Нажмите Enter для продолжения...", 'blue'))
     
     except KeyboardInterrupt:
-        logging.error("Exiting Ghost Framework. Goodbye!")
+        logging.error("Выход из Ghost Framework. До свидания!")
         sys.exit(0)  # Exit cleanly
 
 if __name__ == "__main__":

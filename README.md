@@ -1,5 +1,7 @@
 # <p align="center"> **👻Ghost Framework👻**
 
+[Русский интерфейс: установка и ограничения](README.ru.md)
+
 <p align="center">  
   <img src="https://img.shields.io/badge/Platform-Linux-a80505?style=plastic">
   <img src="https://img.shields.io/badge/License-MIT-a80505?style=plastic">
