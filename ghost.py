@@ -231,11 +231,52 @@ def connect_device():
         logging.error(f"Не удалось запустить ADB: {e}")
     return None
 
+def choose_stream_settings():
+    """Выбрать параметры трансляции до подключения к телефону."""
+    print(color_text("Разрешение трансляции (максимальная сторона):", 'yellow'))
+    print("[1] Исходное\n[2] До 1920 пикселей\n[3] До 1280 пикселей (по умолчанию)\n"
+          "[4] До 960 пикселей\n[5] Свой размер\n[0] Отмена")
+    print("Пропорции экрана сохраняются. Разрешение дисплея телефона не меняется.")
+    sizes = {'1': 0, '2': 1920, '3': 1280, '4': 960}
+    while True:
+        choice = input(color_text("Выберите разрешение [3]: ", 'blue')).strip() or '3'
+        if choice == '0':
+            return None
+        if choice in sizes:
+            size = sizes[choice]
+            break
+        if choice == '5':
+            value = input(color_text("Максимальная сторона в пикселях (256–8192): ", 'blue')).strip()
+            if value.isascii() and value.isdecimal() and len(value) <= 4 and 256 <= int(value) <= 8192:
+                size = int(value)
+                break
+            print("Введите целое число от 256 до 8192.")
+        else:
+            print("Выберите пункт от 0 до 5.")
+    print("Частота кадров: например, 15, 30 или 60. 0 — без ограничения.")
+    while True:
+        value = input(color_text("Максимальная частота кадров [30]: ", 'blue')).strip() or '30'
+        if value.isascii() and value.isdecimal() and len(value) <= 3 and 0 <= int(value) <= 240:
+            fps = int(value)
+            break
+        print("Введите целое число от 0 до 240.")
+    options = []
+    if size:
+        options.extend(['--max-size', str(size)])
+    if fps:
+        options.extend(['--max-fps', str(fps)])
+    print(f"Трансляция: {'до ' + str(size) + ' пикселей' if size else 'исходное разрешение'}, "
+          f"{'до ' + str(fps) + ' кадр/с' if fps else 'без ограничения частоты кадров'}.")
+    return options
+
 def control_device():
     """Открыть экран выбранного телефона с управлением через scrcpy."""
     scrcpy = shutil.which('scrcpy')
     if not scrcpy:
         logging.error("scrcpy не установлен. Установите scrcpy и повторите запуск пункта 29.")
+        return
+    options = choose_stream_settings()
+    if options is None:
         return
     device = select_device()
     if not device:
@@ -248,7 +289,7 @@ def control_device():
     try:
         result = subprocess.run(
             [scrcpy, '--serial', device, '--no-audio',
-             '--window-title', f'Ghost — управление телефоном ({device})']
+             '--window-title', f'Ghost — управление телефоном ({device})'] + options
         )
         if result.returncode:
             logging.error(f"scrcpy завершился с кодом {result.returncode}. "
