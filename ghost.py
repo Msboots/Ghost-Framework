@@ -265,19 +265,22 @@ def choose_stream_settings():
         options.extend(['--max-size', str(size)])
     if fps:
         options.extend(['--max-fps', str(fps)])
-    print("Звук телефона:\n[1] Воспроизводить на ПК (по умолчанию)\n[2] Без звука")
+    print("Источник звука:\n[1] Аудио телефона (по умолчанию)\n"
+          "[2] Микрофон телефона\n[3] Без звука")
     while True:
-        audio = input(color_text("Выберите режим звука [1]: ", 'blue')).strip() or '1'
-        if audio in ('1', '2'):
+        audio = input(color_text("Выберите источник звука [1]: ", 'blue')).strip() or '1'
+        if audio in ('1', '2', '3'):
             break
-        print("Выберите 1 или 2.")
-    if audio == '1':
-        options.extend(['--audio-source=output', '--audio-codec=aac'])
+        print("Выберите 1, 2 или 3.")
+    if audio in ('1', '2'):
+        source = 'output' if audio == '1' else 'mic'
+        options.extend([f'--audio-source={source}', '--audio-codec=aac'])
     else:
         options.append('--no-audio')
+    audio_label = {'1': 'аудио телефона на ПК', '2': 'микрофон телефона на ПК', '3': 'без звука'}[audio]
     print(f"Трансляция: {'до ' + str(size) + ' пикселей' if size else 'исходное разрешение'}, "
           f"{'до ' + str(fps) + ' кадр/с' if fps else 'без ограничения частоты кадров'}, "
-          f"{'звук на ПК' if audio == '1' else 'без звука'}.")
+          f"{audio_label}.")
     return options
 
 def control_device():
