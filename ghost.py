@@ -25,6 +25,9 @@ from datetime import datetime
 import shutil 
 import zipfile 
 import gzip
+import socket
+import tempfile
+import time
 
 # Third-Party Libraries
 from tqdm import tqdm 
@@ -126,6 +129,7 @@ def show_menu():
         )
     print(f"{color_text('[29]', 'green')} Управлять телефоном с ПК (мышь и клавиатура)")
     print(f"{color_text('[30]', 'green')} Подключиться по SSH (терминал телефона)")
+    print(f"{color_text('[31]', 'green')} Управлять экраном через SSH-туннель")
     print(f"\n{color_text('[0]', 'red')} Выход\n")
 
 
@@ -312,8 +316,8 @@ def control_device():
     except OSError as e:
         logging.error(f"Не удалось запустить scrcpy: {e}")
 
-def connect_ssh():
-    """Открыть интерактивный SSH-сеанс без сохранения пароля."""
+def ssh_connection_settings():
+    """Собрать параметры SSH без сохранения пароля."""
     ssh = shutil.which('ssh')
     if not ssh:
         logging.error("SSH-клиент не установлен. Установите openssh-client.")
@@ -356,6 +360,13 @@ def connect_ssh():
             return
         command.extend(['-i', key, '-o', 'IdentitiesOnly=yes'])
     command.extend(['--', host])
+    return command
+
+def connect_ssh():
+    """Открыть интерактивный SSH-сеанс без сохранения пароля."""
+    command = ssh_connection_settings()
+    if command is None:
+        return
     print("Вход по SSH. Пароль при вводе не отображается. Для возврата в Ghost введите exit.")
     try:
         result = subprocess.run(command)
@@ -363,6 +374,92 @@ def connect_ssh():
             logging.error(f"SSH-сеанс завершился с кодом {result.returncode}. Подробности указаны выше.")
     except OSError as e:
         logging.error(f"Не удалось запустить SSH: {e}")
+
+def wait_ssh_tunnel(process, ssh, control_path, host):
+    """Дождаться авторизации SSH и создания перенаправления."""
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline:
+        if process.poll() is not None:
+            raise RuntimeError("SSH-туннель не открылся. Проверьте сообщения SSH выше.")
+        if os.path.exists(control_path):
+            check = subprocess.run(
+                [ssh, '-S', control_path, '-O', 'check', '--', host],
+                capture_output=True, timeout=2
+            )
+            if check.returncode == 0:
+                return
+        time.sleep(0.2)
+    raise RuntimeError("Истекло время ожидания входа по SSH (60 секунд).")
+
+def control_via_ssh():
+    """Передавать ADB и потоки scrcpy через собственный локальный SSH-туннель."""
+    scrcpy = shutil.which('scrcpy')
+    adb = shutil.which('adb')
+    if not scrcpy or not adb:
+        logging.error("Для управления экраном нужны scrcpy и ADB на ПК.")
+        return
+    options = choose_stream_settings()
+    if options is None:
+        return
+    command = ssh_connection_settings()
+    if command is None:
+        return
+    print("Укажите порт ADB на самом телефоне: порт беспроводной отладки "
+          "или уже включённого ADB TCP. SSH сам не включает отладку.")
+    while True:
+        port = input(color_text("Порт ADB на телефоне [5555; Enter — 5555]: ", 'blue')).strip() or '5555'
+        if port.isascii() and port.isdecimal() and len(port) <= 5 and 1 <= int(port) <= 65535:
+            break
+        print("Введите порт от 1 до 65535.")
+    process = None
+    serial = None
+    try:
+        # ОС выбирает свободный порт; SSH завершится, если до привязки его займут.
+        with socket.socket() as listener:
+            listener.bind(('127.0.0.1', 0))
+            local_port = listener.getsockname()[1]
+        with tempfile.TemporaryDirectory(prefix='ghost-ssh-') as directory:
+            control_path = os.path.join(directory, 'control')
+            tunnel = command[:-2] + [
+                '-N', '-T', '-M', '-S', control_path,
+                '-o', 'ControlPersist=no', '-o', 'ForkAfterAuthentication=no',
+                '-o', 'ExitOnForwardFailure=yes',
+                '-o', 'ServerAliveInterval=15', '-o', 'ServerAliveCountMax=3',
+                '-L', f'127.0.0.1:{local_port}:127.0.0.1:{port}'
+            ] + command[-2:]
+            print("Открывается SSH-туннель. При необходимости введите пароль SSH.")
+            try:
+                process = subprocess.Popen(tunnel)
+                wait_ssh_tunnel(process, command[0], control_path, command[-1])
+                serial = f'127.0.0.1:{local_port}'
+                result = subprocess.run([adb, 'connect', serial], capture_output=True, text=True, timeout=15)
+                state = subprocess.run([adb, '-s', serial, 'get-state'], capture_output=True, text=True, timeout=5)
+                if state.returncode or state.stdout.strip() != 'device':
+                    logging.error((result.stdout + result.stderr + state.stderr).strip())
+                    raise RuntimeError("ADB через SSH недоступен. Проверьте порт отладки, "
+                                       "сопряжение ADB и разрешение доступа на телефоне.")
+                print("Туннель подключён. Закройте окно scrcpy для завершения сеанса.")
+                result = subprocess.run([
+                    scrcpy, '--serial', serial, '--force-adb-forward',
+                    '--window-title', 'Ghost — управление через SSH'
+                ] + options)
+                if result.returncode:
+                    logging.error(f"scrcpy завершился с кодом {result.returncode}. Подробности указаны выше.")
+            finally:
+                # Отключается только созданное здесь подключение, остальные не затрагиваются.
+                try:
+                    if serial:
+                        subprocess.run([adb, 'disconnect', serial], capture_output=True, timeout=5)
+                finally:
+                    if process is not None and process.poll() is None:
+                        process.terminate()
+                        try:
+                            process.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            process.kill()
+                            process.wait(timeout=5)
+    except (OSError, RuntimeError, subprocess.TimeoutExpired) as e:
+        logging.error(f"Ошибка SSH-туннеля: {e}")
 
 def disconnect_device():
     """Disconnect from all connected devices."""
@@ -921,6 +1018,8 @@ def main():
                 control_device()
             elif choice == '30':
                 connect_ssh()
+            elif choice == '31':
+                control_via_ssh()
             elif choice == '0':
                 logging.info("Выход из Ghost Framework. До свидания!")
                 break
