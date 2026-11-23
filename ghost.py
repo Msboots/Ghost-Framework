@@ -265,8 +265,19 @@ def choose_stream_settings():
         options.extend(['--max-size', str(size)])
     if fps:
         options.extend(['--max-fps', str(fps)])
+    print("Звук телефона:\n[1] Воспроизводить на ПК (по умолчанию)\n[2] Без звука")
+    while True:
+        audio = input(color_text("Выберите режим звука [1]: ", 'blue')).strip() or '1'
+        if audio in ('1', '2'):
+            break
+        print("Выберите 1 или 2.")
+    if audio == '1':
+        options.extend(['--audio-source=output', '--audio-codec=aac'])
+    else:
+        options.append('--no-audio')
     print(f"Трансляция: {'до ' + str(size) + ' пикселей' if size else 'исходное разрешение'}, "
-          f"{'до ' + str(fps) + ' кадр/с' if fps else 'без ограничения частоты кадров'}.")
+          f"{'до ' + str(fps) + ' кадр/с' if fps else 'без ограничения частоты кадров'}, "
+          f"{'звук на ПК' if audio == '1' else 'без звука'}.")
     return options
 
 def control_device():
@@ -288,7 +299,7 @@ def control_device():
                      "Закройте окно scrcpy, чтобы вернуться в меню Ghost.", 'blue'))
     try:
         result = subprocess.run(
-            [scrcpy, '--serial', device, '--no-audio',
+            [scrcpy, '--serial', device,
              '--window-title', f'Ghost — управление телефоном ({device})'] + options
         )
         if result.returncode:
