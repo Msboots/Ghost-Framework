@@ -19,7 +19,7 @@ import os
 import sys 
 import subprocess 
 import logging
-import re 
+import ipaddress
 import asyncio 
 from datetime import datetime  
 import shutil 
@@ -124,6 +124,7 @@ def show_menu():
             f"{color_text(f'[{left}]'.ljust(4), 'green')} {items[left - 1]:<29} "
             f"{color_text(f'[{right}]', 'green')} {items[right - 1]}"
         )
+    print(f"{color_text('[29]', 'green')} Управлять телефоном с ПК (мышь и клавиатура)")
     print(f"\n{color_text('[0]', 'red')} Выход\n")
 
 
@@ -155,8 +156,19 @@ def run_command(command):
 
 def validate_ip(ip):
     """Validate an IP address."""
-    pattern = re.compile(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$")
-    return pattern.match(ip) is not None
+    try:
+        ipaddress.IPv4Address(ip)
+        return True
+    except ipaddress.AddressValueError:
+        return False
+
+def validate_adb_address(address):
+    """Проверить IPv4-адрес с необязательным портом ADB."""
+    host, separator, port = address.partition(':')
+    return validate_ip(host) and (
+        not separator or (1 <= len(port) <= 5 and port.isascii()
+                          and port.isdecimal() and 1 <= int(port) <= 65535)
+    )
 
 def select_device():
     """Allow the user to select a specific device if multiple devices are connected."""
@@ -194,16 +206,55 @@ def show_connected_devices():
         print(color_text(output, 'yellow'))
 
 def connect_device():
-    """Connect to a device using its IP address."""
-    ip = input(color_text("Введите IP-адрес устройства: ", 'blue'))
-    if not validate_ip(ip):
-        logging.error("Неверный IP-адрес.")
+    """Подключиться к ADB по IPv4-адресу и проверить авторизацию."""
+    address = input(color_text("Введите IP-адрес или IP:порт устройства: ", 'blue')).strip()
+    if not validate_adb_address(address):
+        logging.error("Неверный адрес. Введите IPv4 или IPv4:порт (1–65535).")
+        return None
+    serial = address if ':' in address else f"{address}:5555"
+    try:
+        result = subprocess.run(
+            ['adb', 'connect', serial], capture_output=True, text=True, timeout=15
+        )
+        state = subprocess.run(
+            ['adb', '-s', serial, 'get-state'], capture_output=True, text=True, timeout=5
+        )
+        if state.returncode == 0 and state.stdout.strip() == 'device':
+            logging.info(f"Подключено: {serial}")
+            return serial
+        logging.error((result.stdout + result.stderr + state.stderr).strip())
+        logging.error("Проверьте беспроводную отладку и разрешение подключения на телефоне. "
+                      "Для нового сопряжения выполните adb pair IP:ПОРТ_СОПРЯЖЕНИЯ.")
+    except subprocess.TimeoutExpired:
+        logging.error("Телефон не ответил вовремя. Проверьте адрес, порт и сеть.")
+    except OSError as e:
+        logging.error(f"Не удалось запустить ADB: {e}")
+    return None
+
+def control_device():
+    """Открыть экран выбранного телефона с управлением через scrcpy."""
+    scrcpy = shutil.which('scrcpy')
+    if not scrcpy:
+        logging.error("scrcpy не установлен. Установите scrcpy и повторите запуск пункта 29.")
         return
-    output = run_command(f"adb connect {ip}")
-    if "connected" in output.lower():
-        logging.info(output)
-    else:
-        logging.error(output)
+    device = select_device()
+    if not device:
+        print("Включите беспроводную отладку на телефоне и укажите адрес подключения.")
+        device = connect_device()
+        if not device:
+            return
+    print(color_text("Открывается экран телефона. Управление: мышь и клавиатура.\n"
+                     "Закройте окно scrcpy, чтобы вернуться в меню Ghost.", 'blue'))
+    try:
+        result = subprocess.run(
+            [scrcpy, '--serial', device, '--no-audio',
+             '--window-title', f'Ghost — управление телефоном ({device})']
+        )
+        if result.returncode:
+            logging.error(f"scrcpy завершился с кодом {result.returncode}. "
+                          "Подробности указаны выше в выводе scrcpy.")
+    except OSError as e:
+        logging.error(f"Не удалось запустить scrcpy: {e}")
 
 def disconnect_device():
     """Disconnect from all connected devices."""
@@ -758,6 +809,8 @@ def main():
                     logging.error("Неверное действие.")
             elif choice == '28':
                 view_device_logs()
+            elif choice == '29':
+                control_device()
             elif choice == '0':
                 logging.info("Выход из Ghost Framework. До свидания!")
                 break
